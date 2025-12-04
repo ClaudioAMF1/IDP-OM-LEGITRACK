@@ -115,7 +115,7 @@ class _LoginScreenState extends State<LoginScreen> {
               // Botão Entrar
               CustomButton(
                 text: _isLoading ? "Entrando..." : "Entrar",
-                onPressed: _isLoading ? null : _handleLogin,
+                onPressed: _isLoading ? null : () => _handleLogin(),
               ),
 
               const SizedBox(height: 16),
