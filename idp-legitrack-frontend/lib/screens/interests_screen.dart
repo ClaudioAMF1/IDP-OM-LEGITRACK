@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'main_screen.dart'; // Mantenha este import se ainda usar o botão Continuar no fluxo de login
+import '../services/api_service.dart';
+import 'main_screen.dart';
 
 class InterestsScreen extends StatefulWidget {
   // Novos parâmetros opcionais
-  final Set<String>? initialSelection;
+  final Set<int>? initialSelection;
   final bool isTab; // Saber se é aba ou tela de setup
-  final Function(Set<String>)? onSelectionChanged;
+  final Function(Set<int>)? onSelectionChanged;
 
   const InterestsScreen({
     super.key,
@@ -19,39 +20,149 @@ class InterestsScreen extends StatefulWidget {
 }
 
 class _InterestsScreenState extends State<InterestsScreen> {
-  // Inicializamos vazio, mas vamos preencher no initState
-  final Set<String> _selectedInterests = {};
+  final _apiService = ApiService();
+  final Set<int> _selectedInterests = {};
+  List<Map<String, dynamic>> _temas = [];
+  bool _isLoading = true;
+  bool _isSaving = false;
 
-  final List<Map<String, dynamic>> _categories = [
-    {'label': 'Tecnologia', 'icon': Icons.monitor},
-    {'label': 'Segurança', 'icon': Icons.shield_outlined},
-    {'label': 'Economia', 'icon': Icons.attach_money},
-    {'label': 'Meio Ambiente', 'icon': Icons.eco_outlined},
-    {'label': 'Educação', 'icon': Icons.menu_book_outlined},
-    {'label': 'Saúde', 'icon': Icons.vaccines_outlined},
-  ];
+  // Mapeamento de ícones para temas
+  final Map<String, IconData> _iconMapping = {
+    'Tecnologia': Icons.monitor,
+    'Segurança': Icons.shield_outlined,
+    'Economia': Icons.attach_money,
+    'Meio Ambiente': Icons.eco_outlined,
+    'Educação': Icons.menu_book_outlined,
+    'Saúde': Icons.vaccines_outlined,
+  };
 
   @override
   void initState() {
     super.initState();
-    // SE recebermos interesses do pai, carregamos eles aqui
+    _loadTemas();
     if (widget.initialSelection != null) {
       _selectedInterests.addAll(widget.initialSelection!);
     }
   }
 
-  void _toggleSelection(String label) {
+  Future<void> _loadTemas() async {
     setState(() {
-      if (_selectedInterests.contains(label)) {
-        _selectedInterests.remove(label);
+      _isLoading = true;
+    });
+
+    try {
+      final result = await _apiService.listarTemas();
+
+      if (result['success']) {
+        final temasData = result['data'] as List;
+        setState(() {
+          _temas = temasData
+              .map((tema) => {
+                    'id': tema['id_tema'],
+                    'label': tema['tema'],
+                    'icon': _iconMapping[tema['tema']] ?? Icons.category,
+                  })
+              .toList();
+          _isLoading = false;
+        });
+
+        // Se for aba, carregar interesses do usuário
+        if (widget.isTab && widget.initialSelection == null) {
+          _loadUserInteresses();
+        }
       } else {
-        _selectedInterests.add(label);
+        setState(() {
+          _isLoading = false;
+        });
+        _showError('Erro ao carregar temas');
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      _showError('Erro ao conectar com o servidor');
+    }
+  }
+
+  Future<void> _loadUserInteresses() async {
+    try {
+      final result = await _apiService.obterInteressesUsuario();
+
+      if (result['success']) {
+        final interessesData = result['data'] as List;
+        setState(() {
+          _selectedInterests.clear();
+          for (var interesse in interessesData) {
+            _selectedInterests.add(interesse['id_tema']);
+          }
+        });
+      }
+    } catch (e) {
+      // Silencioso - não é crítico
+    }
+  }
+
+  void _toggleSelection(int id) {
+    setState(() {
+      if (_selectedInterests.contains(id)) {
+        _selectedInterests.remove(id);
+      } else {
+        _selectedInterests.add(id);
       }
     });
-    // Se for aba, aqui você poderia chamar uma função para salvar no pai/backend
+
     if (widget.onSelectionChanged != null) {
       widget.onSelectionChanged!(_selectedInterests);
     }
+  }
+
+  Future<void> _saveInteresses() async {
+    if (_selectedInterests.isEmpty) {
+      _showError('Selecione pelo menos um interesse');
+      return;
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      final result = await _apiService.atualizarInteresses(_selectedInterests.toList());
+
+      if (!mounted) return;
+
+      if (result['success']) {
+        // Navega para a tela principal
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => MainScreen(
+              userInterests: _selectedInterests,
+            ),
+          ),
+        );
+      } else {
+        _showError(result['message'] ?? 'Erro ao salvar interesses');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showError('Erro ao conectar com o servidor');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
 
   @override
@@ -93,23 +204,31 @@ class _InterestsScreenState extends State<InterestsScreen> {
 
               const SizedBox(height: 40),
 
-              Expanded(
-                child: GridView.builder(
-                  itemCount: _categories.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                    childAspectRatio: 1.0,
+              if (_isLoading)
+                const Expanded(
+                  child: Center(
+                    child: CircularProgressIndicator(),
                   ),
-                  itemBuilder: (context, index) {
-                    final category = _categories[index];
-                    final label = category['label'] as String;
-                    final icon = category['icon'] as IconData;
-                    final isSelected = _selectedInterests.contains(label);
+                )
+              else
+                Expanded(
+                  child: GridView.builder(
+                    itemCount: _temas.length,
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                      childAspectRatio: 1.0,
+                    ),
+                    itemBuilder: (context, index) {
+                      final tema = _temas[index];
+                      final id = tema['id'] as int;
+                      final label = tema['label'] as String;
+                      final icon = tema['icon'] as IconData;
+                      final isSelected = _selectedInterests.contains(id);
 
-                    return GestureDetector(
-                      onTap: () => _toggleSelection(label),
+                      return GestureDetector(
+                        onTap: () => _toggleSelection(id),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
                         decoration: BoxDecoration(
@@ -140,10 +259,10 @@ class _InterestsScreenState extends State<InterestsScreen> {
                           ],
                         ),
                       ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
-              ),
 
               // O Botão Continuar só aparece no fluxo inicial (NÃO TAB)
               if (!widget.isTab) ...[
@@ -152,17 +271,8 @@ class _InterestsScreenState extends State<InterestsScreen> {
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: _selectedInterests.isNotEmpty
-                        ? () {
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => MainScreen(
-                                  userInterests: _selectedInterests,
-                                ),
-                              ),
-                            );
-                          }
+                    onPressed: (_selectedInterests.isNotEmpty && !_isSaving)
+                        ? _saveInteresses
                         : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF4169E1),
@@ -171,9 +281,9 @@ class _InterestsScreenState extends State<InterestsScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: const Text(
-                      "Continuar",
-                      style: TextStyle(fontSize: 18),
+                    child: Text(
+                      _isSaving ? "Salvando..." : "Continuar",
+                      style: const TextStyle(fontSize: 18),
                     ),
                   ),
                 ),

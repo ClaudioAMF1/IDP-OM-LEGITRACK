@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/custom_input.dart';
 import '../widgets/custom_button.dart';
+import '../services/auth_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -13,6 +14,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _authService = AuthService();
+  bool _isLoading = false;
 
   @override
   Widget build(BuildContext context) {
@@ -89,11 +92,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
               // 3. BOTÕES
               CustomButton(
-                text: "Criar Conta",
-                onPressed: () {
-                  // Lógica de cadastro viria aqui
-                  print("Cadastrar: ${_nameController.text}");
-                },
+                text: _isLoading ? "Criando Conta..." : "Criar Conta",
+                onPressed: _isLoading ? null : _handleRegister,
               ),
 
               const SizedBox(height: 16),
@@ -113,5 +113,72 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _handleRegister() async {
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (name.isEmpty || email.isEmpty || password.isEmpty) {
+      _showError('Por favor, preencha todos os campos');
+      return;
+    }
+
+    if (password.length < 6) {
+      _showError('A senha deve ter pelo menos 6 caracteres');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final result = await _authService.register(name, email, password);
+
+      if (!mounted) return;
+
+      if (result['success']) {
+        // Registro bem-sucedido - mostra mensagem e volta para login
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Conta criada com sucesso! Faça login.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Volta para a tela de login
+        Navigator.pop(context);
+      } else {
+        _showError(result['message'] ?? 'Erro ao criar conta');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showError('Erro ao conectar com o servidor');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 }
