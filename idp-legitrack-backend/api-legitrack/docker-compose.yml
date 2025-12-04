@@ -19,26 +19,34 @@ services:
     ports:
       - "5000:5000"
     environment:
-      SQLALCHEMY_DATABASE_URI: postgresql://user:password@db:5432/legitrack_db
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: user
+      DB_PASSWORD: password
+      DB_NAME: legitrack_db
+      FLASK_ENV: development
+      JWT_SECRET_KEY: dev-secret-key-change-in-production
     depends_on:
       - db
-    # --- ADICIONE ISSO AQUI EMBAIXO ---
     volumes:
       - .:/app
-    # ----------------------------------
     command: python app.py
 
   worker:
     build: .
     restart: always
     environment:
-      SQLALCHEMY_DATABASE_URI: postgresql://user:password@db:5432/legitrack_db
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: user
+      DB_PASSWORD: password
+      DB_NAME: legitrack_db
+      FLASK_ENV: development
+      JWT_SECRET_KEY: dev-secret-key-change-in-production
     depends_on:
       - db
-    # --- ADICIONE ISSO AQUI TAMBÉM ---
     volumes:
       - .:/app
-    # ----------------------------------
     command: python -m app.worker
 
 volumes:
