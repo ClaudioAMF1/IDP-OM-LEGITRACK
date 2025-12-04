@@ -38,11 +38,32 @@ O projeto LegiTrack foi integrado com sucesso! Agora o frontend Flutter se conec
 #### Opção A: Com Docker (Recomendado)
 
 ```bash
-cd idp-legitrack-backend
+# IMPORTANTE: Navegue para o diretório correto
+cd idp-legitrack-backend/api-legitrack
+
+# Inicie os containers
 docker-compose up -d
+
+# Aguarde alguns segundos para o banco de dados inicializar
+
+# Execute as migrations (primeira vez apenas)
+docker-compose exec api flask db upgrade
+
+# Verifique se está rodando
+docker-compose ps
 ```
 
 O backend estará disponível em: `http://localhost:5000`
+
+Para ver os logs:
+```bash
+docker-compose logs -f api
+```
+
+Para parar os containers:
+```bash
+docker-compose down
+```
 
 #### Opção B: Sem Docker
 
