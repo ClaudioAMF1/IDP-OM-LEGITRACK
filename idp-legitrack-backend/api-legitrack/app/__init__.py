@@ -16,7 +16,10 @@ def create_app():
     db_password = os.getenv('DB_PASSWORD', 'password')
     db_name = os.getenv('DB_NAME', 'legitrack_db')
 
-    app.config['SQLALCHEMY_DATABASE_URI'] = f'postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}'
+    database_uri = f'postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}'
+
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_uri
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'fallback-secret-key-change-this')
 
     # Configuração do CORS - Permite requisições do frontend
@@ -40,19 +43,22 @@ def create_app():
     if cors_origins == '*':
         cors.init_app(app, resources={r"/*": {"origins": "*"}})
     else:
-        origins_list = cors_origins.split(',')
+        origins_list = [origin.strip() for origin in cors_origins.split(',')]
         cors.init_app(app, resources={r"/*": {"origins": origins_list}})
 
+    # Registra as rotas
     with app.app_context():
-        # Importar rotas aqui para registrar Blueprints
-        from .routes import bp as main_bp
-        from .auth import bp as auth_bp 
+        try:
+            # Importar rotas aqui para registrar Blueprints
+            from .routes import bp as main_bp
+            from .auth import bp as auth_bp
 
-        app.register_blueprint(main_bp)
-        app.register_blueprint(auth_bp)
+            app.register_blueprint(main_bp)
+            app.register_blueprint(auth_bp)
 
-        # NÃO descomente o db.create_all() se estiver usando migrations.
-        # As tabelas serão criadas pelo 'flask db upgrade'.
-        # db.create_all() 
+            print("✅ Blueprints registrados com sucesso")
+        except Exception as e:
+            print(f"❌ Erro ao registrar blueprints: {e}")
+            raise
 
     return app
