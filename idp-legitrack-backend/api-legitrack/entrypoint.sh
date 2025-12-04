@@ -11,5 +11,14 @@ done
 
 echo "✅ PostgreSQL está pronto!"
 
+# Se for o container api (não worker), executa migrations e seed
+if [ "$1" = "python" ] && [ "$2" = "app.py" ]; then
+  echo "🔄 Executando migrations..."
+  flask db upgrade || echo "⚠️  Migrations falharam ou já estão aplicadas"
+
+  echo "🌱 Populando banco de dados..."
+  python -m app.seed || echo "⚠️  Seed falhou ou já está populado"
+fi
+
 # Executa o comando passado como argumento
 exec "$@"

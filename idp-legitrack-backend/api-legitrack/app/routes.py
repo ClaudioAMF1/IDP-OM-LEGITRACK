@@ -239,10 +239,10 @@ def listar_temas():
       - Interesses
     responses:
       200:
-        description: Lista de temas com ID e Label
+        description: Lista de temas com ID e nome
     """
     temas = db.session.scalars(db.select(TP_Temas).order_by(TP_Temas.ds_tema)).all()
-    lista = [{"id": t.id_tema, "label": t.ds_tema} for t in temas]
+    lista = [{"id_tema": t.id_tema, "tema": t.ds_tema} for t in temas]
     return jsonify(lista), 200
 
 @bp.route("/usuario/interesses", methods=["GET", "POST"])
@@ -285,25 +285,21 @@ def gerenciar_interesses():
             db.select(TB_Interesses).filter_by(id_user=current_user_id)
             .options(joinedload(TB_Interesses.tema))
         ).all()
-        nomes_temas = [i.tema.ds_tema for i in interesses if i.tema]
-        return jsonify(nomes_temas), 200
+        lista_temas = [{"id_tema": i.tema.id_tema, "tema": i.tema.ds_tema} for i in interesses if i.tema]
+        return jsonify(lista_temas), 200
 
     if request.method == "POST":
         data = request.get_json()
-        nomes_temas_recebidos = data.get('temas', [])
+        ids_temas_recebidos = data.get('ids_temas', [])
 
         try:
             db.session.query(TB_Interesses).filter_by(id_user=current_user_id).delete()
-            
-            if nomes_temas_recebidos:
-                temas_db = db.session.scalars(
-                    db.select(TP_Temas).filter(TP_Temas.ds_tema.in_(nomes_temas_recebidos))
-                ).all()
 
-                for tema in temas_db:
-                    novo = TB_Interesses(id_user=current_user_id, id_interesse=tema.id_tema)
+            if ids_temas_recebidos:
+                for id_tema in ids_temas_recebidos:
+                    novo = TB_Interesses(id_user=current_user_id, id_interesse=id_tema)
                     db.session.add(novo)
-            
+
             db.session.commit()
             return jsonify({"mensagem": "Interesses atualizados"}), 200
         except Exception as e:
