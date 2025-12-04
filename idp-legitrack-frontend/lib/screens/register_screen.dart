@@ -93,7 +93,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               // 3. BOTÕES
               CustomButton(
                 text: _isLoading ? "Criando Conta..." : "Criar Conta",
-                onPressed: _isLoading ? null : _handleRegister,
+                onPressed: _isLoading ? null : () => _handleRegister(),
               ),
 
               const SizedBox(height: 16),
