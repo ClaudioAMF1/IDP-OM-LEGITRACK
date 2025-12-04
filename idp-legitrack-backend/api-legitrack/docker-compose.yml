@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:13
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: legitrack_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  api:
+    build: .
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      SQLALCHEMY_DATABASE_URI: postgresql://user:password@db:5432/legitrack_db
+    depends_on:
+      - db
+    # --- ADICIONE ISSO AQUI EMBAIXO ---
+    volumes:
+      - .:/app
+    # ----------------------------------
+    command: python app.py
+
+  worker:
+    build: .
+    restart: always
+    environment:
+      SQLALCHEMY_DATABASE_URI: postgresql://user:password@db:5432/legitrack_db
+    depends_on:
+      - db
+    # --- ADICIONE ISSO AQUI TAMBÉM ---
+    volumes:
+      - .:/app
+    # ----------------------------------
+    command: python -m app.worker
+
+volumes:
+  postgres_data:
