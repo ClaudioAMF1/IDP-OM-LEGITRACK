@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import '../models/process_model.dart';
+import '../services/api_service.dart';
 import 'home_screen.dart';
 import 'favorites_screen.dart';
 import 'interests_screen.dart';
 import 'profile_screen.dart';
 
 class MainScreen extends StatefulWidget {
-  final Set<String> userInterests;
+  final Set<int> userInterests;
 
   const MainScreen({super.key, required this.userInterests});
 
@@ -15,89 +16,141 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
+  final _apiService = ApiService();
   int _currentIndex = 0;
 
   // Estado local dos interesses que pode mudar e ser passado para a Home
-  late Set<String> _currentInterests;
+  late Set<int> _currentInterests;
 
   // 1. DADOS CENTRALIZADOS
   // Essa é a "fonte da verdade" dos dados. Todos as telas leem daqui.
-  final List<ProcessModel> _processes = [
-    ProcessModel(
-      id: "PL 2024/001",
-      title: "Marco Regulatório da IA",
-      description:
-          "Estabelece diretrizes para o desenvolvimento e uso ético de sistemas de IA no Brasil.",
-      status: "Em tramitação na Câmara",
-      date: "14 de jan. de 2024",
-      isFavorite: false,
-    ),
-    ProcessModel(
-      id: "PL 2024/002",
-      title: "Programa Nacional de Telemedicina",
-      description:
-          "Regulamenta e expande o acesso aos serviços de telemedicina em todo território nacional.",
-      status: "Aprovado na Câmara",
-      date: "19 de jan. de 2024",
-      isFavorite: false,
-    ),
-    ProcessModel(
-      id: "PL 2024/004",
-      title: "Lei de Proteção de Dados Educacionais",
-      description:
-          "Estabelece regras para coleta e uso de dados pessoais de estudantes.",
-      status: "Pronto para votação",
-      date: "4 de fev. de 2024",
-      isFavorite: false,
-    ),
-    ProcessModel(
-      id: "PL 2024/008",
-      title: "Incentivo à Energia Solar",
-      description:
-          "Cria subsídios para instalação de painéis solares residenciais.",
-      status: "Em análise no Senado",
-      date: "10 de fev. de 2024",
-      isFavorite: false,
-    ),
-  ];
+  List<ProcessModel> _processes = [];
+  bool _isLoading = true;
+  Set<int> _favoritesIds = {};
 
   @override
   void initState() {
     super.initState();
-    // Copia o que veio do login para nossa variável local editável
     _currentInterests = Set.from(widget.userInterests);
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    await Future.wait([
+      _loadProjetos(),
+      _loadFavoritos(),
+    ]);
+
+    setState(() {
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _loadProjetos() async {
+    try {
+      final result = await _apiService.listarProjetos(
+        idsTemas: _currentInterests.toList(),
+      );
+
+      if (result['success']) {
+        final projetosData = result['data'] as List;
+        setState(() {
+          _processes = projetosData.map((projeto) {
+            return ProcessModel(
+              id: projeto['id_projeto'].toString(),
+              title: projeto['numero'] ?? 'Sem número',
+              description: projeto['ementa'] ?? 'Sem descrição',
+              status: projeto['ultima_situacao'] ?? 'Status não disponível',
+              date: projeto['data_apresentacao'] ?? '',
+              isFavorite: _favoritesIds.contains(projeto['id_projeto']),
+            );
+          }).toList();
+        });
+      }
+    } catch (e) {
+      // Handle error silently or show message
+    }
+  }
+
+  Future<void> _loadFavoritos() async {
+    try {
+      final result = await _apiService.listarFavoritos();
+
+      if (result['success']) {
+        final favoritosData = result['data'] as List;
+        setState(() {
+          _favoritesIds = favoritosData
+              .map((fav) => fav['id_projeto'] as int)
+              .toSet();
+        });
+      }
+    } catch (e) {
+      // Handle error silently
+    }
   }
 
   // 2. LÓGICA DE FAVORITAR E REORDENAR
-  void _handleToggleFavorite(String id) {
-    setState(() {
-      // Encontra o index pelo ID para garantir que alteramos o item certo
-      final index = _processes.indexWhere((p) => p.id == id);
-      if (index != -1) {
-        // Inverte o status
-        _processes[index].isFavorite = !_processes[index].isFavorite;
+  Future<void> _handleToggleFavorite(String id) async {
+    final idProjeto = int.parse(id);
 
-        // ORDENAÇÃO: Favoritos sobem para o topo
-        _processes.sort((a, b) {
-          if (b.isFavorite && !a.isFavorite) return 1;
-          if (!b.isFavorite && a.isFavorite) return -1;
-          return 0; // Mantém a ordem original se ambos forem iguais
+    try {
+      final result = await _apiService.toggleFavorito(idProjeto);
+
+      if (result['success']) {
+        setState(() {
+          final index = _processes.indexWhere((p) => p.id == id);
+          if (index != -1) {
+            _processes[index].isFavorite = !_processes[index].isFavorite;
+
+            if (_processes[index].isFavorite) {
+              _favoritesIds.add(idProjeto);
+            } else {
+              _favoritesIds.remove(idProjeto);
+            }
+
+            // ORDENAÇÃO: Favoritos sobem para o topo
+            _processes.sort((a, b) {
+              if (b.isFavorite && !a.isFavorite) return 1;
+              if (!b.isFavorite && a.isFavorite) return -1;
+              return 0;
+            });
+          }
         });
       }
-    });
+    } catch (e) {
+      // Handle error
+    }
   }
 
   // 3. ATUALIZAÇÃO DE INTERESSES
   // Chamada quando o usuário muda algo na aba "Interesses"
-  void _handleInterestsUpdate(Set<String> newInterests) {
+  Future<void> _handleInterestsUpdate(Set<int> newInterests) async {
     setState(() {
       _currentInterests = newInterests;
-      // O setState vai reconstruir a tela e passar os novos filtros pra HomeScreen automaticamente
     });
+
+    try {
+      await _apiService.atualizarInteresses(newInterests.toList());
+      _loadProjetos(); // Recarrega projetos com os novos interesses
+    } catch (e) {
+      // Handle error
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     // Cria a lista filtrada apenas para a tela de Favoritos
     final favoriteList = _processes.where((p) => p.isFavorite).toList();
 

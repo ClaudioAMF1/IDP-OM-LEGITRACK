@@ -1,31 +1,82 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 
-class NotificationsScreen extends StatelessWidget {
+class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
 
   @override
+  State<NotificationsScreen> createState() => _NotificationsScreenState();
+}
+
+class _NotificationsScreenState extends State<NotificationsScreen> {
+  final _apiService = ApiService();
+  List<Map<String, dynamic>> _notifications = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotificacoes();
+  }
+
+  Future<void> _loadNotificacoes() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final result = await _apiService.listarNotificacoes();
+
+      if (result['success']) {
+        final notificacoesData = result['data'] as List;
+        setState(() {
+          _notifications = notificacoesData.map((notif) {
+            return {
+              'id': notif['id_notificacao'],
+              'title': notif['titulo'] ?? 'Notificação',
+              'description': notif['mensagem'] ?? '',
+              'date': notif['data_criacao'] ?? '',
+              'isUnread': !(notif['lida'] ?? false),
+            };
+          }).toList();
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _marcarComoLida(int idNotificacao, int index) async {
+    try {
+      final result = await _apiService.marcarNotificacaoLida(idNotificacao);
+
+      if (result['success']) {
+        setState(() {
+          _notifications[index]['isUnread'] = false;
+        });
+      }
+    } catch (e) {
+      // Handle error silently
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // Dados Mockados (Simulando o que viria do backend)
-    final notifications = [
-      {
-        'title': 'Novo projeto sobre aposentadoria',
-        'description': 'PL 2024/003 foi apresentado no Senado',
-        'date': '31 de jan. de 2024',
-        'isUnread': true, // Esse tem bolinha vermelha
-      },
-      {
-        'title': 'Atualização no Marco da IA',
-        'description': 'O relator apresentou novo texto substitutivo na comissão.',
-        'date': '28 de jan. de 2024',
-        'isUnread': false,
-      },
-      {
-        'title': 'Votação Urgente',
-        'description': 'A PL da Telemedicina entrou em regime de urgência.',
-        'date': '20 de jan. de 2024',
-        'isUnread': false,
-      },
-    ];
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -46,19 +97,36 @@ class NotificationsScreen extends StatelessWidget {
         ),
         centerTitle: true,
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(24),
-        itemCount: notifications.length,
-        itemBuilder: (context, index) {
-          final item = notifications[index];
-          return _NotificationCard(
-            title: item['title'] as String,
-            description: item['description'] as String,
-            date: item['date'] as String,
-            isUnread: item['isUnread'] as bool,
-          );
-        },
-      ),
+      body: _notifications.isEmpty
+          ? const Center(
+              child: Text(
+                'Nenhuma notificação',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey,
+                ),
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(24),
+              itemCount: _notifications.length,
+              itemBuilder: (context, index) {
+                final item = _notifications[index];
+                return GestureDetector(
+                  onTap: () {
+                    if (item['isUnread'] as bool) {
+                      _marcarComoLida(item['id'] as int, index);
+                    }
+                  },
+                  child: _NotificationCard(
+                    title: item['title'] as String,
+                    description: item['description'] as String,
+                    date: item['date'] as String,
+                    isUnread: item['isUnread'] as bool,
+                  ),
+                );
+              },
+            ),
     );
   }
 }

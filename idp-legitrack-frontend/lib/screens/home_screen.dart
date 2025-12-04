@@ -5,7 +5,7 @@ import 'notification_screen.dart';
 import 'process_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  final Set<String> initialFilters;
+  final Set<int> initialFilters;
   final List<ProcessModel> processes;
   final Function(String) onToggleFavorite;
 
@@ -21,32 +21,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final List<String> _filters = ['Todos'];
   String _selectedFilter = 'Todos';
-  late List<String> _filters;
-
-  @override
-  void initState() {
-    super.initState();
-    _updateFilters();
-  }
-
-  @override
-  void didUpdateWidget(HomeScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.initialFilters != oldWidget.initialFilters) {
-      _updateFilters();
-    }
-  }
-
-  void _updateFilters() {
-    List<String> sortedInterests = widget.initialFilters.toList()..sort();
-    setState(() {
-      _filters = ['Todos', ...sortedInterests];
-      if (!_filters.contains(_selectedFilter)) {
-        _selectedFilter = 'Todos';
-      }
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -186,12 +162,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 itemCount: widget.processes.length,
                 itemBuilder: (context, index) {
                   final process = widget.processes[index];
-                  // (Lógica de filtro omitida para brevidade)
-                   if (_selectedFilter != 'Todos' && 
-                      !process.title.contains(_selectedFilter) && 
-                      !process.description.contains(_selectedFilter)) {
-                     // return const SizedBox.shrink(); 
-                  }
                   return ProcessCard(
                     id: process.id,
                     title: process.title,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/custom_input.dart';
 import '../widgets/custom_button.dart';
+import '../services/auth_service.dart';
 import 'register_screen.dart';
 import 'interests_screen.dart';
 
@@ -15,6 +16,8 @@ class _LoginScreenState extends State<LoginScreen> {
   // Controladores para capturar o texto (como o 'ref' ou 'state' do React)
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _authService = AuthService();
+  bool _isLoading = false;
 
   @override
   Widget build(BuildContext context) {
@@ -111,16 +114,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
               // Botão Entrar
               CustomButton(
-                text: "Entrar",
-                onPressed: () {
-                  // Navegação com "Replacement" para o usuário não voltar pro Login ao dar "voltar"
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const InterestsScreen(),
-                    ),
-                  );
-                },
+                text: _isLoading ? "Entrando..." : "Entrar",
+                onPressed: _isLoading ? null : _handleLogin,
               ),
 
               const SizedBox(height: 16),
@@ -146,5 +141,62 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _handleLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      _showError('Por favor, preencha todos os campos');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final result = await _authService.login(email, password);
+
+      if (!mounted) return;
+
+      if (result['success']) {
+        // Login bem-sucedido - navega para a tela de interesses
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const InterestsScreen(),
+          ),
+        );
+      } else {
+        _showError(result['message'] ?? 'Erro ao fazer login');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showError('Erro ao conectar com o servidor');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 }
